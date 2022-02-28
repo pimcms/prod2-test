@@ -1,0 +1,11 @@
+<form model="shopee.settings" title="Shopee Settings">
+    <!--<field name="include_contact"/>
+    <field name="include_account"/>
+    <field name="include_inventory"/>
+    <field name="include_sale"/>-->
+    <field name="default_uom_id"/>
+    <separator/>
+    <field name="order_auto_copy_to_sale"/>
+    <field name="order_auto_copy_to_picking"/>
+    <field name="order_auto_complete_picking"/>
+</form>

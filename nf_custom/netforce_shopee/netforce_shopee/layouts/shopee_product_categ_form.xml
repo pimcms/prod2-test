@@ -1,0 +1,11 @@
+<inherit inherit="prod_categ_form">
+    <button string="Options" position="append">
+        <item string="Get Shopee Brands" method="get_shopee_brands"/>
+    </button>
+    <field name="brands" position="after">
+        <field name="is_shopee"/>
+    </field>
+    <related position="append">
+        <field name="sync_records"/>
+    </related>
+</inherit>

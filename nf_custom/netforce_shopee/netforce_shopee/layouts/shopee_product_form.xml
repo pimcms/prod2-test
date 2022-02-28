@@ -1,0 +1,13 @@
+<inherit inherit="product_form">
+    <tab string="Other" position="before">
+        <tab string="Shopee">
+            <field name="shopee_sync_stock"/>
+            <separator string="Details"/>
+            <field name="shopee_details">
+            </field>
+        </tab>
+    </tab>
+    <related position="append">
+        <field name="sync_records"/>
+    </related>
+</inherit>
