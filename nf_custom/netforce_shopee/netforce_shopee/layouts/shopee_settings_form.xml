@@ -8,4 +8,6 @@
     <field name="order_auto_copy_to_sale"/>
     <field name="order_auto_copy_to_picking"/>
     <field name="order_auto_complete_picking"/>
+    <separator/>
+    <field name="use_order_num_for_picking"/>
 </form>

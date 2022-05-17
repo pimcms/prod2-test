@@ -93,7 +93,7 @@ class Account(Model):
         db = database.get_active_db()
         redirect_url += "?db=%s" % db
         #url=base_url+path+"?partner_id=%s&timestamp=%s&sign=%s&redirect=%s"%(partner_id,timest,sign,redirect_url)
-        url += "&redirect_url=%s" % redirect_url
+        url += "&redirect=%s" % redirect_url
 
         return {
             "next": {
@@ -455,15 +455,67 @@ class Account(Model):
                 if tasks.is_aborted(job_id):
                     return
                 tasks.set_progress(job_id,50+j/len(item_ids)*50,"Step 2: Writing %s of %s Products to Database"%(j,len(item_ids)))
-            is_last = (j+1) * 50 > len(item_ids)
+            is_last = (j + 50) > len(item_ids)
             if is_last:
                 self.get_products_info(obj.id, item_ids[j:], context=context)
             else:
                 self.get_products_info(obj.id, item_ids[j:j+50], context=context)
             db.commit()
             j += 50
-    
+
     def get_products_info(self, account_id, item_ids, context={}):
+        if len(item_ids) > 50:
+            self.get_products_info(account_id, item_ids[0:50], context=context)
+            self.get_products_info(account_id, item_ids[50:], context=context)
+        settings = get_model("shopee.settings").browse(1)
+        if not settings:
+            raise Exception("Shopee Settings not found")
+        path="/api/v2/product/get_item_base_info"
+        url = self.generate_url(account_id=account_id,path=path)
+        url += "&item_id_list=%s" % ",".join([str(k) for k in item_ids])
+        print("url",url)
+        req = requests.get(url)
+        res = req.json()
+        if res.get("error"):
+            raise Exception("Sync error: %s"%res)
+        resp = res["response"]
+        print("resp",resp)
+        for item in resp["item_list"]:
+            vals = {
+                "account_id": account_id,
+                "item_name": item["item_name"],
+                "item_sku": item["item_sku"],
+                "sync_id": item["item_id"],
+                "description": item["description"],
+                "condition": item["condition"],
+                "item_status": item["item_status"],
+                "has_model": item["has_model"],
+            }
+            vals["shopee_create_time"] = datetime.fromtimestamp(item["create_time"]).strftime("%Y-%m-%d %H:%M:%S") 
+            vals["shopee_update_time"] = datetime.fromtimestamp(item["update_time"]).strftime("%Y-%m-%d %H:%M:%S") 
+            if not item["has_model"]:
+                if item.get("stock_info"):
+                    for si in item["stock_info"]:
+                        if si["stock_type"] == 2:
+                            vals["normal_stock"] = si["normal_stock"]
+                if item.get("price_info"):
+                    vals["current_price"] = item["price_info"][0]["current_price"]
+
+            if item["category_id"]:
+                categs = get_model("shopee.product.categ").search([["sync_id","=",str(item["category_id"])]])
+                vals["category_id"] = categs[0] if categs else None
+            prods = get_model("shopee.product").search([["account_id","=",str(account_id)],["sync_id","=",str(item["item_id"])]])
+            if not prods:
+                prod_id = get_model("shopee.product").create(vals)
+            else:
+                prod_id = prods[0]
+                get_model("shopee.product").write([prod_id],vals)
+            prod = get_model("shopee.product").browse(prod_id)
+            if item["has_model"]:
+                prod.get_model_list()
+            prod.map_product()
+    
+    def get_products_info_old(self, account_id, item_ids, context={}):
         if len(item_ids) > 50:
             self.get_products_info(item_ids[0:50])
             self.get_products_info(item_ids[50:])

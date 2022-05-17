@@ -27,6 +27,7 @@ from . import model
 from . import field
 from . import profile_access
 from . import field_access
+from . import field_access_add
 from . import share_access
 from . import role
 from . import login
@@ -89,6 +90,7 @@ from . import script
 from . import import_inline_help
 from . import reason_code
 from . import menu_access
+from . import menu_access_add
 from . import ui_params
 from . import report_custom
 from . import bg_task

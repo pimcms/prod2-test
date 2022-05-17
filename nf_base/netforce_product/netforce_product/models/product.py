@@ -42,7 +42,7 @@ class Product(Model):
     #_multi_company=True
     _fields = {
         "name": fields.Char("Name", required=True, search=True, translate=True, size=256),
-        "code": fields.Char("Product Code", required=True, search=True, index=True),
+        "code": fields.Char("Code", required=True, search=True, index=True),
         "barcode": fields.Char("Barcode", search=True),
         "type": fields.Selection([["stock", "Stockable"], ["consumable", "Consumable"], ["service", "Service"], ["master", "Master"], ["bundle", "Bundle"]], "Product Type", required=True, search=True),
         "uom_id": fields.Many2One("uom", "Default UoM", required=True, search=True),

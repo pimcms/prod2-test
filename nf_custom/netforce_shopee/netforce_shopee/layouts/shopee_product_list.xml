@@ -1,0 +1,11 @@
+<list model="shopee.product">
+    <head>
+        <button string="Update Variants" method="get_model_list"/>
+        <button string="Map System Product" method="map_product"/>
+    </head>
+    <field name="account_id"/>
+    <field name="item_sku"/>
+    <field name="item_name"/>
+    <field name="has_model"/>
+    <field name="item_status"/>
+</list>

@@ -101,4 +101,29 @@ class MenuAccess(Model):
         res = super().delete(*a, **kw)
         ipc.send_signal("clear_ui_params_cache")
 
+    def duplicate_menu_access(self, ids, context={}):
+        print("menu.access.duplicate",ids)
+        obj = self.browse(ids[0])
+        vals = {
+            "profile_id": obj.profile_id.id,
+            "user_id": obj.user_id.id,
+            "action": obj.action,
+            "menu": obj.menu,
+            "parent_menu": obj.parent_menu,
+            "button": obj.button,
+            "label": obj.label,
+            "access":obj.access,
+        }
+        new_id = self.create(vals)
+        return {
+            "next":{
+                "name": "menu_access",
+                "mode": "form",
+                "active_id":new_id,
+
+            },
+            "flash": "Menu access duplicated.",
+        }           
+
+
 MenuAccess.register()

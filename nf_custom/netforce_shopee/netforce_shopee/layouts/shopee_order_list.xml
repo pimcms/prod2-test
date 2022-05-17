@@ -1,4 +1,4 @@
-<list model="shopee.order">
+<list model="shopee.order" colors='{"#f66":[["show_warning","=",true]]}'>
     <head>
         <button string="Get Shipping Parameter" method="get_shipping_parameter"/>
         <button string="Get Tracking Number" method="get_tracking_number"/>
@@ -6,12 +6,14 @@
         <button string="Copy to Goods Issue" method="copy_to_picking"/>
         <button string="Copy to Customer Invoice" method="copy_to_invoice"/>
     </head>
-    <field name="account_id"/>
+    <field name="account_id" help="Choose Shopee Account"/>
     <field name="order_sn"/>
     <field name="region"/>
+    <field name="weight"/>
     <field name="total_amount"/>
     <field name="order_create_time"/>
     <field name="ship_by_date"/>
     <field name="shipping_carrier"/>
     <field name="order_status"/>
+    <field name="show_warning" invisible="1"/>
 </list>

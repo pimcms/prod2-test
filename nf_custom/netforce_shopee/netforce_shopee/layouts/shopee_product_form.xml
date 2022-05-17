@@ -1,13 +1,44 @@
-<inherit inherit="product_form">
-    <tab string="Other" position="before">
-        <tab string="Shopee">
-            <field name="shopee_sync_stock"/>
-            <separator string="Details"/>
-            <field name="shopee_details">
-            </field>
+<form model="shopee.product">
+    <top>
+        <button string="Options">
+            <item string="Get Variants" method="get_model_list"/>
+            <item string="Map System Product" method="map_product"/>
+        </button>
+    </top>
+    <head>
+        <field name="item_status"/>
+    </head>
+    <tabs>
+        <tab string="General">
+            <field name="account_id"/>
+            <field name="sync_id"/>
+            <field name="item_status"/>
+            <field name="item_sku"/>
+            <field name="item_name"/>
+            <field name="product_id"/>
+            <field name="category_id" condition='[["has_children","=",false]]'/>
+            <field name="description"/>
+            <field name="has_model"/>
+            <group attrs='{"invisible":[["hase_model","=","1"]]}'>
+                <field name="current_price"/>
+                <field name="current_stock"/>
+            </group>
+            <group attrs='{"invisible":[["has_model","=","0"]]}'>
+                <separator string="Variants"/>
+                <field name="models">
+                    <list>
+                        <field name="model_sku"/>
+                        <field name="current_price"/>
+                        <field name="current_stock"/>
+                        <field name="product_id"/>
+                        <field name="tier_index"/>
+                        <field name="tier_info"/>
+                    </list>
+                </field>
+            </group>
         </tab>
-    </tab>
-    <related position="append">
-        <field name="sync_records"/>
+    </tabs>
+    <related>
+        <field name="tier_variation"/>
     </related>
-</inherit>
+</form>

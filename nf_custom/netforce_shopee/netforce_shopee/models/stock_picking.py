@@ -12,7 +12,7 @@ import hmac
 class Picking(Model):
     _inherit = "stock.picking"
     _fields = {
-        "sync_records": fields.One2Many("sync.record","related_id","Sync Records"),
+        #"sync_records": fields.One2Many("sync.record","related_id","Sync Records"),
         "recipient_first_name": fields.Char("First Name"),
         "recipient_last_name": fields.Char("Last Name"),
         "recipient_phone": fields.Char("Phone"),

@@ -10,8 +10,8 @@
     </top>
     <tabs>
         <tab string="General">
-            <field name="account_id"/>
-            <field name="order_sn"/>
+            <field name="account_id" help="Choose Shopee Account"/>
+            <field name="order_sn" help="This is the order number"/>
             <field name="order_status"/>
             <field name="order_create_time"/>
             <field name="region"/>
@@ -25,6 +25,7 @@
             <field name="days_to_ship"/>
             <field name="ship_by_date"/>
             <field name="actual_shipping_fee"/>
+            <field name="weight"/>
             <field name="items">
                 <list>
                     <field name="item_id"/>

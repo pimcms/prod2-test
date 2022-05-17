@@ -10,7 +10,9 @@ class Settings(Model):
         "order_auto_copy_to_sale": fields.Boolean("Auto Copy Shopee Order to Sale Order when Syncing"),
         "order_auto_copy_to_picking": fields.Boolean("Auto Copy Shopee Order to Goods Issue when Syncing"),
         "order_auto_complete_picking": fields.Boolean("Auto Complete Goods Issue when Syncing"),
+        "use_order_num_for_picking": fields.Boolean("Use Order Number for Goods Issue"),
         "auto_refresh_tokens": fields.Boolean("Auto Refresh Token"),
+        "check_stock": fields.Boolean("Check Stock"),
     }
     
     def read(self, ids, field_names=None, load_m2o=True, load_all_trans=False, get_time=False, context={}):
