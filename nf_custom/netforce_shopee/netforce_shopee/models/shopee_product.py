@@ -35,7 +35,7 @@ class ShopeeProduct(Model):
     #_key = ["company_id", "number"]
     _fields = {
         "account_id": fields.Many2One("shopee.account","Shopee Account",search=True),
-        "sync_id": fields.Char("Sync ID"), #XXX
+        "sync_id": fields.Char("Sync ID",search=True), #XXX
         "category_id": fields.Many2One("shopee.product.categ","Product Category",search=True), #XXX
         "item_name": fields.Char("Product Name",search=True),
         "description": fields.Text("Product Description", search=True),
@@ -50,8 +50,14 @@ class ShopeeProduct(Model):
         "tier_variation": fields.One2Many("shopee.product.variation", "shopee_product_id", "Tier Variations"),
         "models": fields.One2Many("shopee.product.model", "shopee_product_id", "Variations"),
         "product_id": fields.Many2One("product","System Product",search=True),
+        "show_warning": fields.Boolean("Show Warning", function="get_show_warning", store=True),
     }
     _order = "account_id, sync_id"
+
+    def write(self, ids, vals, **kw):
+        print("shopee.product.write",ids,vals)
+        super().write(ids, vals, **kw)
+        self.function_store(ids)
 
     def get_model_list(self, ids, context={}):
         print("shopee.product.get_model_list",ids)
@@ -107,7 +113,7 @@ class ShopeeProduct(Model):
                 for model in obj.models:
                     if not model.model_sku:
                         continue
-                    prod_ids = get_model("product").search([["code","=",model.model_sku]])
+                    prod_ids = get_model("product").search([["code","=",model.model_sku.strip()]])
                     if prod_ids:
                         model.write({"product_id":prod_ids[0]})
             else:
@@ -131,6 +137,22 @@ class ShopeeProduct(Model):
             res=req.json()
             print("res",res)
 
-
+    def get_show_warning(self, ids, context={}):
+        print("shopee.product.get_show_warning",ids)
+        vals = {}
+        for obj in self.browse(ids):
+            if not obj.has_model:
+                if obj.product_id:
+                    vals[obj.id] = False
+                else:
+                    vals[obj.id] = True
+            else:
+                model_ids = [m.id for m in obj.models]
+                get_model("shopee.product.model").function_store(model_ids)
+                vals[obj.id] = False
+                for m in obj.models:
+                    if m.show_warning:
+                        vals[obj.id] = True
+        return vals
 
 ShopeeProduct.register()

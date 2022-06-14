@@ -93,7 +93,7 @@ class Payment(Model):
         "date_week": fields.Char("Week",function="get_date_agg",function_multi=True),
         "date_month": fields.Char("Month",function="get_date_agg",function_multi=True),
     }
-    _order = "number desc,date desc,id desc"
+    _order = "date desc, number desc, id desc"
 
     def _get_currency(self, context={}):
         settings = get_model("settings").browse(1)

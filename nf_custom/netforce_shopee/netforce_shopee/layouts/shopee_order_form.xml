@@ -1,17 +1,18 @@
 <form model="shopee.order">
     <top>
         <button string="Options">
-            <item string="Get Shipping Parameter" method="get_shipping_parameter"/>
+            <!--<item string="Get Shipping Parameter" method="get_shipping_parameter"/>-->
+            <!--<item string="Ship Order" method="ship_order"/>-->
             <item string="Get Tracking Number" method="get_tracking_number"/>
-            <item string="Copy to Sale Order" method="copy_to_sale"/>
+            <!--<item string="Copy to Sale Order" method="copy_to_sale"/>-->
             <item string="Copy to Goods Issue" method="copy_to_picking"/>
-            <item string="Copy to Customer Invoice" method="copy_to_invoice"/>
+            <!--<item string="Copy to Customer Invoice" method="copy_to_invoice"/>-->
         </button>
     </top>
     <tabs>
         <tab string="General">
-            <field name="account_id" help="Choose Shopee Account"/>
-            <field name="order_sn" help="This is the order number"/>
+            <field name="account_id"/>
+            <field name="order_sn"/>
             <field name="order_status"/>
             <field name="order_create_time"/>
             <field name="region"/>
@@ -73,8 +74,11 @@
         </tab>
         <tab string="Shipping Info">
             <field name="dropoff"/>
+            <field name="dropoff_info"/>
             <field name="pickup"/>
+            <field name="pickup_info"/>
             <field name="non_integrated"/>
+            <field name="non_integrated_info"/>
             <separator/>
             <field name="tracking_number"/>
             <field name="package_number"/>
@@ -87,6 +91,9 @@
             <field name="invoice_data_total_value"/>
             <field name="invoice_data_products_total_value"/>
             <field name="invoice_data_tax_code"/>
+        </tab>
+        <tab string="Troubleshooting">
+            <field name="logs"/>
         </tab>
     </tabs>
     <related>

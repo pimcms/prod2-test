@@ -3,6 +3,7 @@
         <button string="Options">
             <item string="Get Variants" method="get_model_list"/>
             <item string="Map System Product" method="map_product"/>
+            <item string="Update Shopee Stock" method="update_stock"/>
         </button>
     </top>
     <head>
@@ -21,18 +22,20 @@
             <field name="has_model"/>
             <group attrs='{"invisible":[["hase_model","=","1"]]}'>
                 <field name="current_price"/>
-                <field name="current_stock"/>
+                <field name="normal_stock"/>
             </group>
             <group attrs='{"invisible":[["has_model","=","0"]]}'>
                 <separator string="Variants"/>
                 <field name="models">
-                    <list>
+                    <list colors='{"#f66":[["show_warning","=",true]]}'>
+                        <field name="sync_id"/>
                         <field name="model_sku"/>
                         <field name="current_price"/>
-                        <field name="current_stock"/>
+                        <field name="normal_stock"/>
                         <field name="product_id"/>
                         <field name="tier_index"/>
                         <field name="tier_info"/>
+                        <field name="show_warning" invisible="1"/>
                     </list>
                 </field>
             </group>

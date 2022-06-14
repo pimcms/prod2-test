@@ -27,6 +27,7 @@ class Account(Model):
         "pricelist_id": fields.Many2One("price.list","Price List"),
         "stock_journal_id": fields.Many2One("stock.journal","Stock Journal"),
         "contact_id": fields.Many2One("contact","Default Contact"),
+        "company_id": fields.Many2One("company","Company",search=True),
         "require_invoice": fields.Boolean("Require Invoice"),
         "order_last_update_time": fields.DateTime("Shopee Order Last Update Time"),
         "payment_last_update_time": fields.DateTime("Shopee Payment Last Update Time"),
@@ -455,7 +456,7 @@ class Account(Model):
                 if tasks.is_aborted(job_id):
                     return
                 tasks.set_progress(job_id,50+j/len(item_ids)*50,"Step 2: Writing %s of %s Products to Database"%(j,len(item_ids)))
-            is_last = (j + 50) > len(item_ids)
+            is_last = j + 50 > len(item_ids)
             if is_last:
                 self.get_products_info(obj.id, item_ids[j:], context=context)
             else:
@@ -466,7 +467,7 @@ class Account(Model):
     def get_products_info(self, account_id, item_ids, context={}):
         if len(item_ids) > 50:
             self.get_products_info(account_id, item_ids[0:50], context=context)
-            self.get_products_info(account_id, item_ids[50:], context=context)
+            self.get_products_info(account_id, item_ids[50:],context=context)
         settings = get_model("shopee.settings").browse(1)
         if not settings:
             raise Exception("Shopee Settings not found")
@@ -611,58 +612,10 @@ class Account(Model):
             else:
                 method = methods[0]
                 
-    def get_categ_fast(self,ids,context={}):
-        context["skip_check"] = True
-        self.get_categ(ids,context)
-
     def get_categ(self,ids,context={}):
-        obj=self.browse(ids[0])
-        path="/api/v2/product/get_category"
-        url = self.generate_url(account_id=obj.id, path=path)
-        print("url",url)
-        #data["name"]="OA_V2_1"
-        req=requests.get(url)
-        res=req.json()
-        if res.get("error"):
-            raise Exception("Sync error: %s"%res)
-        #print("res",res)
-        resp=res["response"]
-        db=database.get_connection()
-        job_id = context.get("job_id")
-        i = 0
-        for r in resp["category_list"]:           
-            if job_id:
-                if tasks.is_aborted(job_id):
-                    return
-                tasks.set_progress(job_id,i*100/len(resp["category_list"]),"Writing record %s of %s to database."%(i+1,len(resp["category_list"])))
-            parent_id = None
-            if r["parent_category_id"]:
-                parents = get_model("product.categ").search([["sync_id","=",str(r["parent_category_id"])]])
-                parent_id = parents[0] if len(parents) > 0 else None
-            vals={
-                "is_shopee": True,
-                "parent_id": parent_id,
-                "name": "Shopee - "+r["original_category_name"],
-                "sync_records": [("create",{
-                    "sync_id": r["category_id"],
-                    "account_id": "shopee.account,%s"%obj.id,
-                })],
-            }
-            #print("vals",vals)
-            categs = get_model("product.categ").search([["sync_id","=",str(r["category_id"])]])
-            if len(categs) == 0:
-                get_model("product.categ").create(vals)
-            else:
-                if not context.get("skip_check"):
-                    #delete_sync_ids = []
-                    #for categ in categs:
-                    #    sids = get_model("sync.record").search([["related_id","=","product.categ,%s"%categ],["account_id","=",str(obj.id)]])
-                    #    delete_sync_ids.extend(sids)
-                    #if len(delete_sync_ids) > 0:
-                    #    get_model("sync.record").delete(delete_sync_ids)
-                    get_model("product.categ").write(categs,vals)
-            db.commit()
-            i+=1
+        for acc_id in ids:
+            context["account_id"] = acc_id
+            get_model("shopee.product.categ").get_categ(context=context)
 
     def get_shop_categ(self,ids,context={}):
         obj=self.browse(ids[0])
@@ -806,7 +759,7 @@ class Account(Model):
         return order_id
 
 
-    def get_payments(self,ids,context={}):
+    def get_payments_old(self,ids,context={}):
         print("get_payments")
         obj=self.browse(ids[0])
         path="/api/v2/payment/get_escrow_list"

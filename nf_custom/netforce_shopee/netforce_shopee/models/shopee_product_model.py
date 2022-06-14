@@ -31,7 +31,7 @@ class ProductModel(Model):
     _name = "shopee.product.model"
     _string = "Shopee Product Model"
     _fields = {
-        "sync_id": fields.Char("Sync ID"), #XXX
+        "sync_id": fields.Char("Model ID"), #XXX
         "shopee_product_id": fields.Many2One("shopee.product","Shopee Product",search=True),
         "model_sku": fields.Char("Model SKU",search=True),
         "current_price": fields.Decimal("Current Price"),
@@ -40,8 +40,14 @@ class ProductModel(Model):
         "product_id": fields.Many2One("product","System Product",search=True),
         "tier_index": fields.Text("Tier Index"),
         "tier_info": fields.Text("Tier Info", function="get_tier_info"),
+        "show_warning": fields.Boolean("Show Warning", function="get_show_warning", store=True),
     }
     _order = "tier_index"
+
+    def write(self, ids, vals, **kw):
+        print("shopee.product.model.write",ids,vals)
+        super().write(ids, vals, **kw)
+        self.function_store(ids)
 
     def get_tier_info(self, ids, context={}):
         vals = {}
@@ -63,6 +69,15 @@ class ProductModel(Model):
                     option = options[0]
                 infos.append("%s: %s" %(variation.name, option.value))
             vals[obj.id] = '\n'.join(infos)
+        return vals
+
+    def get_show_warning(self, ids, context={}):
+        vals = {}
+        for obj in self.browse(ids):
+            if obj.product_id:
+                vals[obj.id] = False
+            else:
+                vals[obj.id] = True
         return vals
 
 

@@ -1,6 +1,7 @@
 from netforce.model import Model, fields, get_model
 from netforce import access
 from netforce import config
+from netforce import tasks
 import requests
 import hashlib
 import hmac
@@ -76,7 +77,8 @@ class ShopeeOrder(Model):
         "invoices": fields.One2Many("account.invoice","related_id","Invoices"),
         "payments": fields.One2Many("account.payment","related_id","Payments"),
         "weight": fields.Decimal("weight",function="get_weight"),
-        "show_warning": fields.Boolean("Show Warning", function="get_show_warning"),
+        "show_warning": fields.Boolean("Show Warning",function="get_show_warning",store=True, search=True),
+        "logs": fields.Text("Logs"),
     }
     _order = "order_create_time desc"
     _keys = "account_id, order_sn"
@@ -104,6 +106,20 @@ class ShopeeOrder(Model):
         for obj in self.browse(ids):
             vals.append((obj.id,obj.order_sn))
         return vals
+
+    def refresh_order(self, ids, context={}):
+        print("shopee.order.refresh_order",ids)
+        job_id = context.get("job_id")
+        i = 0
+        for obj in self.browse(ids):
+            if job_id:
+                if tasks.is_aborted(job_id):
+                    return
+                tasks.set_progress(job_id,i/len(ids)*100,"Updating Orders: %s of %s."%(i,len(ids)))
+            if not obj.account_id:
+                continue
+            obj.account_id.get_order(obj.order_sn, context=context) 
+            i += 1
     
     def create_order(self, acc_id, vals, context={}):
         print("create_order",acc_id,vals)
@@ -126,15 +142,20 @@ class ShopeeOrder(Model):
             "account_id": "shopee.account,%s"%acc_id,
             })]
         order_id = self.create(create_vals)
+        self.get_tracking_number([order_id],context=context)
         if settings.order_auto_copy_to_sale:
             self.copy_to_sale([order_id],context={"skip_error":True})
         if settings.order_auto_copy_to_picking:
             self.copy_to_picking([order_id],context={"skip_error":True})
+        self.function_store([order_id])
         return order_id
 
     def update_order(self, ids, acc_id, vals, context={}):
         print("Update Order: ids:%s, vals:%s"%(ids, vals))
         order = self.browse(ids[0])
+        company_id = access.get_active_company()
+        if not company_id:
+            access.set_active_company(order.account_id.company_id.id)
         update_vals = {key:value for (key, value) in vals.items() if type(value) not in (dict, list) and key in self._fields}
         update_vals["account_id"] = acc_id
         if update_vals["create_time"]:
@@ -156,6 +177,13 @@ class ShopeeOrder(Model):
             "account_id": "shopee.account,%s"%acc_id,
             })]
         order.write(write_vals)
+        settings = get_model("shopee.settings").browse(1)
+        if settings.order_auto_copy_to_picking and not order.pickings:
+            new_context = context.copy()
+            new_context["skip_error"] = True
+            order.copy_to_picking(context=new_context)
+        self.get_tracking_number([order.id],context=context)
+        self.function_store([order.id])
 
     def get_shipping_parameter(self,ids,context={}):
         for obj in self.browse(ids):
@@ -221,35 +249,97 @@ class ShopeeOrder(Model):
 
 
     def get_tracking_number(self,ids,context={}):
-        obj = self.browse(ids[0])
-        acc = obj.account_id
-        if not acc:
-            raise Exception("Missing Shopee Account in Shopee Order: %s" % obj.order_sn)
-        if not acc.shop_idno:
-            raise Exception("Missing shop ID")
-        if not acc.token:
-            raise Exception("Missing token")
-        shop_id=int(acc.shop_idno)
-        partner_id=int(config.get("shopee_partner_id"))
-        partner_key=config.get("shopee_partner_key")
-        timest=int(time.time())
-        path="/api/v2/logistics/get_tracking_number"
-        base_string="%s%s%s%s%s"%(partner_id,path,timest,acc.token,shop_id)
-        sign=hmac.new(partner_key.encode(),base_string.encode(),hashlib.sha256).hexdigest()
-        #base_url="https://partner.test-stable.shopeemobile.com"
-        base_url="https://partner.shopeemobile.com"
-        url=base_url+path+"?partner_id=%s&timestamp=%s&sign=%s&shop_id=%s&access_token=%s"%(partner_id,timest,sign,shop_id,acc.token)
-        url += "&order_sn=%s" % obj.order_sn
-        print("url",url)
-        req=requests.get(url)
-        res=req.json()
-        if res.get("error"):
-            raise Exception("Sync error: %s"%res)
-        print("res",res)
-        resp=res["response"]
-        write_vals= {"tracking_number":resp["tracking_number"]}
-        obj.write(write_vals)
-        return resp
+        for obj in self.browse(ids):
+            write_vals = {}
+            try:
+                acc = obj.account_id
+                if not acc:
+                    raise Exception("Missing Shopee Account in Shopee Order: %s" % obj.order_sn)
+                if not acc.shop_idno:
+                    raise Exception("Missing shop ID")
+                if not acc.token:
+                    raise Exception("Missing token")
+                company_id = access.get_active_company()
+                if not company_id:
+                    access.set_active_company(acc.company_id.id)
+                shop_id=int(acc.shop_idno)
+                partner_id=int(config.get("shopee_partner_id"))
+                partner_key=config.get("shopee_partner_key")
+                timest=int(time.time())
+                path="/api/v2/logistics/get_tracking_number"
+                base_string="%s%s%s%s%s"%(partner_id,path,timest,acc.token,shop_id)
+                sign=hmac.new(partner_key.encode(),base_string.encode(),hashlib.sha256).hexdigest()
+                #base_url="https://partner.test-stable.shopeemobile.com"
+                base_url="https://partner.shopeemobile.com"
+                url=base_url+path+"?partner_id=%s&timestamp=%s&sign=%s&shop_id=%s&access_token=%s"%(partner_id,timest,sign,shop_id,acc.token)
+                url += "&order_sn=%s" % obj.order_sn
+                print("url",url)
+                req=requests.get(url)
+                res=req.json()
+                if res.get("error"):
+                    raise Exception("Sync error: %s"%res)
+                print("res",res)
+                resp=res["response"]
+                write_vals["tracking_number"]=resp["tracking_number"]
+                if obj.pickings:
+                    for pick in obj.pickings:
+                        pick.write({"ship_tracking":obj.tracking_number})
+                else:
+                    raise Exception("Stock Picking Not Found")
+            except Exception as e:
+                if context.get("skip_error"):
+                    logs = obj.logs or ""
+                    log = "%s : get_tracking_number\n" % datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+                    log += str(e) + "\n"
+                    log += "-" * 10
+                    log += "\n\n"
+                    logs = log + logs
+                    write_vals["logs"] = logs
+            obj.write(write_vals)
+
+    def get_escrow_detail(self,ids,context={}):
+        print("shopee.order.get_escrow_detail",ids)
+        for obj in self.browse(ids):
+            write_vals = {}
+            try:
+                acc = obj.account_id
+                if not acc:
+                    raise Exception("Missing Shopee Account in Shopee Order: %s" % obj.order_sn)
+                if not acc.shop_idno:
+                    raise Exception("Missing shop ID")
+                if not acc.token:
+                    raise Exception("Missing token")
+                company_id = access.get_active_company()
+                if not company_id:
+                    access.set_active_company(acc.company_id.id)
+                shop_id=int(acc.shop_idno)
+                partner_id=int(config.get("shopee_partner_id"))
+                partner_key=config.get("shopee_partner_key")
+                timest=int(time.time())
+                path="/api/v2/payment/get_escrow_detail"
+                base_string="%s%s%s%s%s"%(partner_id,path,timest,acc.token,shop_id)
+                sign=hmac.new(partner_key.encode(),base_string.encode(),hashlib.sha256).hexdigest()
+                #base_url="https://partner.test-stable.shopeemobile.com"
+                base_url="https://partner.shopeemobile.com"
+                url=base_url+path+"?partner_id=%s&timestamp=%s&sign=%s&shop_id=%s&access_token=%s"%(partner_id,timest,sign,shop_id,acc.token)
+                url += "&order_sn=%s" % obj.order_sn
+                print("url",url)
+                req=requests.get(url)
+                res=req.json()
+                if res.get("error"):
+                    raise Exception("Sync error: %s"%res)
+                print("res",res)
+                resp=res["response"]
+            except Exception as e:
+                if context.get("skip_error"):
+                    logs = obj.logs or ""
+                    log = "%s : get_escrow_detail\n" % datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+                    log += str(e) + "\n"
+                    log += "-" * 10
+                    log += "\n\n"
+                    logs = log + logs
+                    write_vals["logs"] = logs
+            obj.write(write_vals)
 
     def copy_to_sale(self,ids,context={}):
         for obj in self.browse(ids):
@@ -304,6 +394,9 @@ class ShopeeOrder(Model):
             }
     
     def copy_to_picking(self,ids,context={}):
+        user_id = access.get_active_user()
+        if not user_id:
+            access.set_active_user(1)
         settings = get_model("shopee.settings").browse(1)
         pick_ids = []
         for obj in self.browse(ids): 
@@ -311,6 +404,8 @@ class ShopeeOrder(Model):
                 if obj.pickings:
                     raise Exception("Order already Have picking: %s" % obj.order_sn)
                 acc = obj.account_id
+                if acc.company_id:
+                    access.set_active_company(acc.company_id.id)
                 if not acc.stock_journal_id:
                     raise Exception("Missing Stock Journal for Shopee Account: %s" % acc.name)
                 if not acc.stock_journal_id.location_from_id:
@@ -322,7 +417,7 @@ class ShopeeOrder(Model):
                     "contact_id": acc.contact_id.id if acc.contact_id else None,
                     "related_id": "shopee.order,%s"%obj.id,
                     "journal_id": acc.stock_journal_id.id,
-                    "date": obj.create_time,
+                    "date": obj.order_create_time,
                     "recipient_first_name": obj.recipient_address_name,
                     "recipient_address": obj.recipient_address_full_address,
                     "recipient_phone": obj.recipient_address_phone,
@@ -330,10 +425,19 @@ class ShopeeOrder(Model):
                     "recipient_city": obj.recipient_address_city,
                     "recipient_province": obj.recipient_address_state,
                     "recipient_country": obj.recipient_address_region,
+                    "ship_tracking": obj.tracking_number,
                     "lines": [],
                 }
                 if settings.use_order_num_for_picking:
                     pick_vals["number"] = obj.order_sn
+                if not obj.shipping_carrier:
+                    raise Exception("No Shipping Carrier assigned for order: %s" % obj.order_sn)
+                ship_method_res = get_model("ship.method").search([["name","=",obj.shipping_carrier]])
+                if not ship_method_res:
+                    raise Exception("Shipping Method not found for %s" % obj.shipping_carrier)
+                else:
+                    ship_method_id = ship_method_res[0]
+                pick_vals["ship_method_id"] = ship_method_id
                 exp_ship_date = datetime.strftime(datetime.strptime(obj.order_create_time,"%Y-%m-%d %H:%M:%S") + timedelta(days=obj.days_to_ship),"%Y-%m-%d")
                 pick_vals["exp_ship_date"] = exp_ship_date
                 for it in obj.items:
@@ -341,20 +445,20 @@ class ShopeeOrder(Model):
                         raise Exception("Missing Item ID")
                     shopee_prods = get_model("shopee.product").search_browse([["account_id","=",acc.id],["sync_id","=",str(it.item_id)]])
                     if not shopee_prods:
-                        raise Exception("Shopee Product not found: %s" % it.item_id)
+                        raise Exception("Shopee Product not found: %s (Sync ID: %s)" % (it.item_sku, it.item_id))
                     shopee_prod = shopee_prods[0]
                     if not it.model_id:
                         prod = shopee_prod.product_id
                         if not prod:
-                            raise Exception("System Product not found for item: %s" % it.item_id)
+                            raise Exception("System Product not found for item: %s (Sync ID: %s)" % (shopee_prod.item_sku, it.item_id))
                     else:
                         models = get_model("shopee.product.model").search_browse([["shopee_product_id.sync_id","=",str(it.item_id)],["sync_id","=",str(it.model_id)]])
                         if not models:
-                            raise Exception("Shopee Product Model Not Found: (item: %s, model: %s)" % (it.item_id, it.model_id))
+                            raise Exception("Shopee Product Model Not Found: (item: %s (Sync ID: %s), model: %s (Sync ID: %s))" % (it.item_sku, it.item_id, it.model_name, it.model_id))
                         model = models[0]
                         prod = model.product_id
                         if not prod:
-                            raise Exception("System Product not found for: (item: %s, model: %s)" % (it.item_id, it.model_id))
+                            raise Exception("System Product not found for: (item: %s (Sync ID: %s), model: %s (Sync ID: %s))" % (it.item_sku, it.item_id, it.model_name, it.model_id))
                     line_vals={
                         "product_id": prod.id,
                         "description": it.item_name,
@@ -369,6 +473,13 @@ class ShopeeOrder(Model):
                 pick_ids.append(pick_id)
             except Exception as e:
                 if context.get("skip_error"):
+                    logs = obj.logs or ""
+                    log = "%s : shopee.order.copy_to_picking\n%s\n" % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"),str(e))
+                    log += "(user_id %s, company_id %s)\n" % (access.get_active_user() ,access.get_active_company())
+                    log += "-" * 10
+                    log += "\n\n"
+                    logs = log + logs
+                    obj.write({"logs":logs})
                     continue
                 else:
                     raise Exception(e)
@@ -380,6 +491,8 @@ class ShopeeOrder(Model):
                     pass
                 else:
                     raise Exception(e)
+        self.get_tracking_number(ids, context=context)
+        self.function_store(ids)
         if len(pick_ids) == 1:
             return {
                 "next": {
@@ -393,6 +506,10 @@ class ShopeeOrder(Model):
             return {
                 "alert": "%s orders copied successfully." %len(ids)
             }
+
+    def copy_to_picking_skip_error(self, ids, context={}):
+        context["skip_error"] = True
+        self.copy_to_picking(ids, context=context)
 
     def copy_to_invoice(self,ids,context={}):
         for obj in self.browse(ids):
@@ -437,6 +554,7 @@ class ShopeeOrder(Model):
                     continue
                 else:
                     raise Exception(e)
+        self.function_store(ids)
         if len(ids) == 1:
             return {
                 "next":{
@@ -468,6 +586,9 @@ class ShopeeOrder(Model):
         vals = {}
         for obj in self.browse(ids):
             check = False
+            if obj.order_status == "CANCELLED":
+                vals[obj.id] = False
+                continue
             if not obj.pickings:
                 check = True
             if obj.account_id.require_invoice and not obj.invoices:
@@ -475,5 +596,14 @@ class ShopeeOrder(Model):
             vals[obj.id] = check
         print("vals", vals)
         return vals
+
+    def search_show_warning(self, clause, context={}): #XXX not used
+        print("shopee.order.search_show_warning",clause)
+        val = clause[2]
+        ids = self.search([])
+        res = self.get_show_warning(ids)
+        ids2 = [x for x in res if res[x] == val]
+        return ["id","in",ids2]
+
 
 ShopeeOrder.register()

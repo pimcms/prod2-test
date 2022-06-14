@@ -46,8 +46,10 @@ class Webhook(Controller):
             #database.set_active_db("nfo_demo_my") #XXX
             access.set_active_user(1)
             with database.Transaction():
-                webhook_id = get_model("shopee.webhook").create({"date":datetime.now().strftime("%Y-%m-%d %H:%M:%S"),"body":json.dumps(json.loads(self.request.body))})
-                get_model("shopee.webhook").handle_webhook([webhook_id])
+                shopee_settings = get_model("shopee.settings").browse(1)
+                if shopee_settings.enable_webhook:
+                    webhook_id = get_model("shopee.webhook").create({"date":datetime.now().strftime("%Y-%m-%d %H:%M:%S"),"body":json.dumps(json.loads(self.request.body))})
+                    get_model("shopee.webhook").handle_webhook([webhook_id])
 
 
 Webhook.register()

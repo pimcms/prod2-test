@@ -27,6 +27,7 @@ class Webhook(Model):
         return super().create(vals,context=context)
 
     def handle_webhook(self,ids,context={}):
+        access.set_active_user(1)
         job_id = context.get("job_id")
         i = 0
         for obj in self.browse(ids):
@@ -45,6 +46,8 @@ class Webhook(Model):
                 if not shop_id:
                     raise Exception("shop_id not found in Body")
                 res = get_model("shopee.account").search_browse([["shop_idno","=",str(shop_id)]])
+                if res.company_id:
+                    access.set_active_company(company_id.id)
                 if not res:
                     raise Exception("Shopee Account not found with ID %s"%shop_id)
                 acc = res[0]
@@ -73,12 +76,26 @@ class Webhook(Model):
                     order_sn = data.get("ordersn")
                     if not order_sn:
                         raise Exception("order_sn not found in data")
-                    order = get_model("shopee.order").search_browse([["order_sn","=",order_sn]])
+                    order_id = acc.get_order(order_sn)
+                    order = get_model("shopee.order").browse(order_id)
+                    # orders = get_model("shopee.order").search_browse([["order_sn","=",order_sn]])
                     if order:
+                        # order = orders[0]
                         order.write({
                             "tracking_number": data.get("tracking_no"),
                             "package_number": data.get("package_number"),
                         })
+                        if order.pickings:
+                            for pick in order.pickings:
+                                pick.write({"ship_tracking": data.get("tracking_no")})
+                        else:
+                            logs = order.logs or ""
+                            log = "%s :shopee.webhook.handle_webhook\n" % datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            log += "Picking not found"
+                            log += "-" * 10
+                            log += "\n\n"
+                            logs = log + logs
+                            order.write({"logs":logs})
                         order.trigger("UPDATE_TRACKING")
                     obj.write({
                        "state": "done",

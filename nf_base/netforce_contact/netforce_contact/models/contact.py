@@ -183,7 +183,7 @@ class Contact(Model):
         "state": "active",
         "company_id": lambda *a: access.get_active_company(),
     }
-    _order = "name"
+    _order = "create_time desc, name"
     #_constraints=["check_email"]
 
     def create(self, vals, **kw):
